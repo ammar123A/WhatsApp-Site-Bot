@@ -1,8 +1,10 @@
 import config from '../config.js';
 import pkg from 'whatsapp-web.js';
 const { MessageMedia } = pkg;
-import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { writeFileSync, unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { downloadPhoto } from './photoStore.js';
 
 // Return the array of photo paths attached to a record.
 // Handles both the legacy single-path `photo` column and the newer
@@ -23,7 +25,8 @@ export function getRecordPhotos(entry) {
 // - Single photo: photo carries the record text as its caption (as before).
 // - Multiple photos: pictures are sent first (bare), then the record text
 //   is sent as a separate, tidy message.
-// Falls back to text-only if none of the photos exist/readable.
+// Photos are fetched from Supabase Storage; missing ones are skipped and it
+// falls back to text-only if none can be downloaded.
 // Library media sends are fixed via scripts/wa-patch.js (strips the media
 // model's __x_id sentinel and tolerates the MsgKey._serialized -> $1 rename);
 // the page-upload fallback below is kept as a safety net only.
@@ -31,9 +34,9 @@ export async function replyWithPhoto(msg, text, photos) {
   const list = Array.isArray(photos)
     ? photos
     : (photos ? [photos] : []);
-  const existing = list
+  const existing = (await Promise.all(list.filter(Boolean).map(downloadPhoto)))
     .filter(Boolean)
-    .filter(p => existsSync(resolve(process.cwd(), p)));
+    .map(p => new MessageMedia(p.mimetype, p.data, p.filename));
 
   if (existing.length === 0) {
     return msg.reply(text);
@@ -43,9 +46,8 @@ export async function replyWithPhoto(msg, text, photos) {
 
   // Multi-photo: pictures first, text after, in its own message.
   if (existing.length > 1) {
-    for (const abs of existing) {
+    for (const media of existing) {
       try {
-        const media = MessageMedia.fromFilePath(abs);
         await msg.client.sendMessage(chatId, media, { linkPreview: false });
       } catch (e) {
         console.log(`  ⚠️ Photo send failed (${e.message || e}).`);
@@ -55,15 +57,17 @@ export async function replyWithPhoto(msg, text, photos) {
   }
 
   // Single photo - caption mode (matches old behaviour).
-  const first = existing[0];
+  const media = existing[0];
   try {
-    const media = MessageMedia.fromFilePath(first);
     await msg.client.sendMessage(chatId, media, { caption: text, linkPreview: false });
   } catch (e) {
     console.log(`  ⚠️ Library send failed (${e.message || e}) - trying UI upload...`);
     if (e.stack) console.log(e.stack.split('\n').slice(0, 6).join('\n'));
+    // The UI upload needs a real file - write a temp copy and clean it up.
+    const tmpPath = join(tmpdir(), `sitebot-${Date.now()}-${media.filename}`);
     try {
-      const uiResult = await sendPhotoViaUI(msg.client, first, text);
+      writeFileSync(tmpPath, Buffer.from(media.data, 'base64'));
+      const uiResult = await sendPhotoViaUI(msg.client, tmpPath, text);
       if (uiResult && uiResult.withCaption) {
         console.log('  ✅ Sent via UI upload fallback (with caption).');
       } else if (uiResult && uiResult.sent) {
@@ -73,6 +77,8 @@ export async function replyWithPhoto(msg, text, photos) {
     } catch (uiErr) {
       console.log(`  ⚠️ UI upload failed (${uiErr.message || uiErr}) - sending text only.`);
       await msg.reply(text);
+    } finally {
+      try { unlinkSync(tmpPath); } catch (e) { /* already gone */ }
     }
   }
 }

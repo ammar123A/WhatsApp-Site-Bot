@@ -313,11 +313,11 @@ client.on('message', async (msg) => {
       const result = await handlePhoto(msg);
       if (result && result.saved) {
         const saved = result.saved;
-        console.log(`📸 Photo saved by ${senderName}: ${saved.absolutePath}`);
+        console.log(`📸 Photo saved by ${senderName}: ${config.photoBucket}/${saved.path}`);
         if (!isCommand) {
           await msg.reply(
             `📸 *Photo recorded:* \`${saved.filename}\`\n\n` +
-            `📂 Saved to:\n\`${saved.absolutePath}\`\n\n` +
+            `☁️ Saved to:\n\`${config.photoBucket}/${saved.path}\`\n\n` +
             `_Tip: use \`.attach issue <id>\`, \`.attach material <id>\`, or \`.attach progress <id>\` to link it to a record._`
           );
         }

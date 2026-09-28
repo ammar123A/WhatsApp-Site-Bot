@@ -1,5 +1,6 @@
 import { saveMessagePhoto } from '../photoStore.js';
 import { progressDB, materialsDB, issuesDB } from '../database.js';
+import config from '../../config.js';
 
 // Latest saved photo (kept for .photo info)
 let lastPhoto = null;
@@ -38,10 +39,10 @@ export function clearPhotoBatch() {
 // the batch. Used when a photo arrives with a caption command so the photo(s)
 // auto-link to the record the command refers to / creates.
 // Returns the number of photos attached (0 if none/batch empty).
-export function attachPendingPhotos(table, id) {
+export async function attachPendingPhotos(table, id) {
   const paths = getPhotoBatchPaths();
   if (!paths.length) return 0;
-  const result = table.updatePhotos(id, paths);
+  const result = await table.updatePhotos(id, paths);
   const ok = result && result.changes > 0;
   if (ok) photoBatch = [];
   return ok ? paths.length : 0;
@@ -124,7 +125,7 @@ export async function handleAttach(msg, args) {
       : 'issue';
 
   const paths = photoBatch.map(p => p.path);
-  const result = table.updatePhotos(id, paths);
+  const result = await table.updatePhotos(id, paths);
   if (result.changes === 0) {
     return msg.reply(`*${field.charAt(0).toUpperCase() + field.slice(1)} #${id} not found.*`);
   }
@@ -134,11 +135,9 @@ export async function handleAttach(msg, args) {
   const replyMsg =
     count > 1
       ? `*📸 ${count} photos attached to ${field} #${id}!*\n\n${fileList}\n\n` +
-        `📂 Folder: \`${photoBatch[0].dir}\``
+        `☁️ Folder: \`${config.photoBucket}/${photoBatch[0].dir}\``
       : `*📸 Photo attached to ${field} #${id}!*\n\n` +
-        `📂 Folder: \`${lastPhoto.dir}\`\n` +
-        `🗂️ File: \`${lastPhoto.filename}\`\n` +
-        `📁 Full path:\n\`${lastPhoto.absolutePath}\``;
+        `☁️ Saved to: \`${config.photoBucket}/${lastPhoto.path}\``;
 
   // Batch is consumed once attached
   photoBatch = [];
@@ -155,9 +154,7 @@ export async function handlePhotoInfo(msg) {
     : '';
   return msg.reply(
     `*📸 Latest photo*\n\n` +
-    `📂 Folder: \`${lastPhoto.dir}\`\n` +
-    `🗂️ File: \`${lastPhoto.filename}\`\n` +
-    `📁 Full path:\n\`${lastPhoto.absolutePath}\`` +
+    `☁️ Saved to: \`${config.photoBucket}/${lastPhoto.path}\`` +
     batchNote
   );
 }

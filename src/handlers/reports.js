@@ -11,7 +11,7 @@ export async function handleDailyReport(msg) {
   report += `${'='.repeat(30)}\n\n`;
   
   // Progress section
-  const progress = progressDB.getByDate(today);
+  const progress = await progressDB.getByDate(today);
   report += `*📝 PROGRESS*\n`;
   if (progress.length > 0) {
     let totalPercentage = 0;
@@ -27,7 +27,7 @@ export async function handleDailyReport(msg) {
   report += '\n';
   
   // Materials section
-  const materials = materialsDB.getByDate(today);
+  const materials = await materialsDB.getByDate(today);
   report += `*📦 MATERIALS RECEIVED*\n`;
   if (materials.length > 0) {
     materials.forEach(m => {
@@ -40,8 +40,8 @@ export async function handleDailyReport(msg) {
   report += '\n';
   
   // Issues section
-  const openIssues = issuesDB.getOpenIssues();
-  const todayIssues = issuesDB.getByDate(today);
+  const openIssues = await issuesDB.getOpenIssues();
+  const todayIssues = await issuesDB.getByDate(today);
   report += `*⚠️ ISSUES*\n`;
   report += `> Open: ${openIssues.length} | New Today: ${todayIssues.length}\n`;
   if (todayIssues.length > 0) {
@@ -56,7 +56,7 @@ export async function handleDailyReport(msg) {
   report += '\n';
   
   // Attendance section
-  const attendance = attendanceDB.getByDate(today);
+  const attendance = await attendanceDB.getByDate(today);
   report += `*👷 ATTENDANCE*\n`;
   report += `> Total Workers: ${attendance.length}\n`;
   if (attendance.length > 0) {
@@ -72,7 +72,7 @@ export async function handleDailyReport(msg) {
   report += '\n';
   
   // Diary section
-  const diary = diaryDB.getByDate(today);
+  const diary = await diaryDB.getByDate(today);
   if (diary) {
     report += `*📒 SITE DIARY*\n`;
     if (diary.weather) report += `> Weather: ${diary.weather}\n`;
@@ -84,7 +84,7 @@ export async function handleDailyReport(msg) {
   report += '\n';
   
   // Milestones section
-  const milestones = milestonesDB.getAll();
+  const milestones = await milestonesDB.getAll();
   if (milestones.length > 0) {
     report += `*🎯 MILESTONES*\n`;
     milestones.slice(0, 3).forEach(m => {
@@ -125,7 +125,7 @@ export async function handleWeeklyReport(msg) {
   report += `${'='.repeat(30)}\n\n`;
   
   // Progress summary
-  const progress = progressDB.getByDateRange(weekStart, weekEnd);
+  const progress = await progressDB.getByDateRange(weekStart, weekEnd);
   report += `*📝 PROGRESS SUMMARY*\n`;
   if (progress.length > 0) {
     const byCategory = {};
@@ -144,7 +144,7 @@ export async function handleWeeklyReport(msg) {
   report += '\n';
   
   // Materials summary
-  const materials = materialsDB.getByDateRange(weekStart, weekEnd);
+  const materials = await materialsDB.getByDateRange(weekStart, weekEnd);
   report += `*📦 MATERIALS SUMMARY*\n`;
   report += `> Total Deliveries: ${materials.length}\n`;
   if (materials.length > 0) {
@@ -160,7 +160,7 @@ export async function handleWeeklyReport(msg) {
   report += '\n';
   
   // Issues summary
-  const issueStats = issuesDB.getStats();
+  const issueStats = await issuesDB.getStats();
   report += `*⚠️ ISSUES SUMMARY*\n`;
   report += `> Total: ${issueStats.total}\n`;
   report += `> Open: ${issueStats.open} | In Progress: ${issueStats.in_progress}\n`;
@@ -175,7 +175,7 @@ export async function handleWeeklyReport(msg) {
   report += `_Weekly average calculated from daily records_\n\n`;
   
   // Milestones
-  const milestones = milestonesDB.getAll();
+  const milestones = await milestonesDB.getAll();
   if (milestones.length > 0) {
     report += `*🎯 MILESTONE PROGRESS*\n`;
     milestones.forEach(m => {
@@ -192,7 +192,7 @@ export async function handleWeeklyReport(msg) {
 
 // Generate stock report
 export async function handleStockReport(msg) {
-  const stocks = materialsDB.getStockSummary();
+  const stocks = await materialsDB.getStockSummary();
   
   let report = `*📊 STOCK REPORT*\n`;
   report += `📅 ${getToday()}\n`;

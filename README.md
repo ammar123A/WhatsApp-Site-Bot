@@ -185,7 +185,14 @@ Concrete, Steel, Timber, Bricks, Sand, Aggregate, Cement, Pipes, Electrical, Plu
 
 ## Data Storage
 
-All data is stored in SQLite database at `./data/sitebot.db`
+Records are stored in Supabase Postgres, and photos in the private Supabase Storage bucket `site-photos` (one folder per day).
+
+One-time setup:
+1. Create a project at [supabase.com](https://supabase.com) (region: Singapore).
+2. SQL Editor → paste [supabase/schema.sql](supabase/schema.sql) → Run.
+3. Storage → New bucket → name `site-photos`, leave **Public** off.
+4. Fill `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and `DATABASE_URL` in `.env` (see `.env.example`).
+5. Moving from the old local SQLite version? Run `node scripts/migrate-to-supabase.js` once.
 
 ## Tips for Site Use
 
