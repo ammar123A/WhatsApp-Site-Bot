@@ -1,0 +1,26 @@
+{
+  "name": "whatsapp-site-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp bot for construction site management - track progress, materials, and issues",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "construction",
+    "bot",
+    "site-management"
+  ],
+  "author": "SiteBot",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "date-fns": "^3.6.0",
+    "dotenv": "^16.4.5",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.23.0"
+  }
+}
