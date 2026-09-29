@@ -13,7 +13,11 @@ export default {
   adminNumbers: (process.env.ADMIN_NUMBERS || '').split(',').filter(Boolean),
   dateFormat: process.env.DATE_FORMAT || 'DD/MM/YYYY',
   timeFormat: process.env.TIME_FORMAT || 'HH:mm',
-  dbPath: process.env.DB_PATH || './data/sitebot.db',
+  databaseUrl: process.env.DATABASE_URL || '',
+  // Origin only - tolerates a pasted https://xxx.supabase.co/rest/v1/
+  supabaseUrl: process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : '',
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
+  photoBucket: 'site-photos',
   
   // Priority levels for issues
   priorities: {

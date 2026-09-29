@@ -8,7 +8,7 @@ export async function handleDiary(msg, args) {
   
   if (!subCommand) {
     const today = getToday();
-    const diary = diaryDB.getByDate(today);
+    const diary = await diaryDB.getByDate(today);
     const msg_text = diary 
       ? buildDiaryMessage(diary)
       : '*No diary entry for today.*\n\nUse .adddiary to add entry.';
@@ -17,7 +17,7 @@ export async function handleDiary(msg, args) {
   
   // Get diary for specific date
   const dateStr = args.join('/');
-  const diary = diaryDB.getByDate(dateStr);
+  const diary = await diaryDB.getByDate(dateStr);
   if (diary) {
     return msg.reply(buildDiaryMessage(diary));
   }
@@ -54,7 +54,7 @@ export async function handleAddDiary(msg, messageBody) {
   }
   
   try {
-    diaryDB.upsert(entry);
+    await diaryDB.upsert(entry);
     return msg.reply(
       '*✅ Diary Updated!*\n\n' +
       `📅 *Date:* ${entry.date}\n` +
@@ -76,8 +76,8 @@ export async function handleAttendance(msg, args) {
   
   if (!subCommand || subCommand === 'today') {
     const today = getToday();
-    const count = attendanceDB.getDailyCount(today);
-    const attendance = attendanceDB.getByDate(today);
+    const count = await attendanceDB.getDailyCount(today);
+    const attendance = await attendanceDB.getByDate(today);
     
     let msg_text = `*👷 ATTENDANCE - ${today}*\n\n`;
     msg_text += `Total Workers: ${count.count}\n\n`;
@@ -110,7 +110,7 @@ export async function handleAttendance(msg, args) {
       return msg.reply('*Usage:* .attendance summary [worker name]');
     }
     
-    const summary = attendanceDB.getWorkerSummary(workerName);
+    const summary = await attendanceDB.getWorkerSummary(workerName);
     if (!summary) {
       return msg.reply(`*No attendance record found for "${workerName}" in the last 30 days.*`);
     }
@@ -158,7 +158,7 @@ export async function handleAddAttendance(msg, messageBody) {
   };
   
   try {
-    attendanceDB.add(entry);
+    await attendanceDB.add(entry);
     return msg.reply(
       '*✅ Attendance Added!*\n\n' +
       `👷 *Worker:* ${entry.workerName}\n` +
@@ -178,7 +178,7 @@ export async function handleWorkOrders(msg, args) {
   const subCommand = args[0]?.toLowerCase();
   
   if (!subCommand || subCommand === 'pending') {
-    const orders = workOrdersDB.getPending();
+    const orders = await workOrdersDB.getPending();
     let msg_text = '*📋 PENDING WORK ORDERS*\n\n';
     
     if (orders.length === 0) {
@@ -231,7 +231,7 @@ export async function handleAddWorkOrder(msg, messageBody) {
   };
   
   try {
-    const result = workOrdersDB.add(entry);
+    const result = await workOrdersDB.add(entry);
     return msg.reply(
       '*✅ Work Order Created!*\n\n' +
       `📋 *#${result.lastInsertRowid} ${entry.title}*\n` +
@@ -251,7 +251,7 @@ export async function handleMilestones(msg, args) {
   const subCommand = args[0]?.toLowerCase();
   
   if (!subCommand || subCommand === 'list') {
-    const milestones = milestonesDB.getAll();
+    const milestones = await milestonesDB.getAll();
     let msg_text = '*🎯 PROJECT MILESTONES*\n\n';
     
     if (milestones.length === 0) {
@@ -296,7 +296,7 @@ export async function handleAddMilestone(msg, messageBody) {
   };
   
   try {
-    const result = milestonesDB.add(entry);
+    const result = await milestonesDB.add(entry);
     return msg.reply(
       '*✅ Milestone Added!*\n\n' +
       `🎯 *${entry.title}*\n` +

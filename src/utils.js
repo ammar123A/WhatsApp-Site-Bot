@@ -1,8 +1,7 @@
 import config from '../config.js';
 import pkg from 'whatsapp-web.js';
 const { MessageMedia } = pkg;
-import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { downloadPhoto } from './photoStore.js';
 
 // Return the array of photo paths attached to a record.
 // Handles both the legacy single-path `photo` column and the newer
@@ -23,17 +22,19 @@ export function getRecordPhotos(entry) {
 // - Single photo: photo carries the record text as its caption (as before).
 // - Multiple photos: pictures are sent first (bare), then the record text
 //   is sent as a separate, tidy message.
-// Falls back to text-only if none of the photos exist/readable.
+// Photos are fetched from Supabase Storage; missing ones are skipped and it
+// falls back to text-only if none can be downloaded.
 // Library media sends are fixed via scripts/wa-patch.js (strips the media
-// model's __x_id sentinel and tolerates the MsgKey._serialized -> $1 rename);
-// the page-upload fallback below is kept as a safety net only.
+// model's __x_id sentinel and tolerates the MsgKey._serialized -> $1 rename).
+// If a send still fails we fall back to text only - never force it through,
+// a failing send may mean WhatsApp is flagging the session.
 export async function replyWithPhoto(msg, text, photos) {
   const list = Array.isArray(photos)
     ? photos
     : (photos ? [photos] : []);
-  const existing = list
+  const existing = (await Promise.all(list.filter(Boolean).map(downloadPhoto)))
     .filter(Boolean)
-    .filter(p => existsSync(resolve(process.cwd(), p)));
+    .map(p => new MessageMedia(p.mimetype, p.data, p.filename));
 
   if (existing.length === 0) {
     return msg.reply(text);
@@ -43,9 +44,8 @@ export async function replyWithPhoto(msg, text, photos) {
 
   // Multi-photo: pictures first, text after, in its own message.
   if (existing.length > 1) {
-    for (const abs of existing) {
+    for (const media of existing) {
       try {
-        const media = MessageMedia.fromFilePath(abs);
         await msg.client.sendMessage(chatId, media, { linkPreview: false });
       } catch (e) {
         console.log(`  ⚠️ Photo send failed (${e.message || e}).`);
@@ -55,125 +55,13 @@ export async function replyWithPhoto(msg, text, photos) {
   }
 
   // Single photo - caption mode (matches old behaviour).
-  const first = existing[0];
+  const media = existing[0];
   try {
-    const media = MessageMedia.fromFilePath(first);
     await msg.client.sendMessage(chatId, media, { caption: text, linkPreview: false });
   } catch (e) {
-    console.log(`  ⚠️ Library send failed (${e.message || e}) - trying UI upload...`);
-    if (e.stack) console.log(e.stack.split('\n').slice(0, 6).join('\n'));
-    try {
-      const uiResult = await sendPhotoViaUI(msg.client, first, text);
-      if (uiResult && uiResult.withCaption) {
-        console.log('  ✅ Sent via UI upload fallback (with caption).');
-      } else if (uiResult && uiResult.sent) {
-        console.log('  ✅ Sent photo via UI upload fallback - sending text separately.');
-        await msg.reply(text);
-      }
-    } catch (uiErr) {
-      console.log(`  ⚠️ UI upload failed (${uiErr.message || uiErr}) - sending text only.`);
-      await msg.reply(text);
-    }
+    console.log(`  ⚠️ Photo send failed (${e.message || e}) - sending text only.`);
+    return msg.reply(text);
   }
-}
-
-// Simulate a real user: attach file in WhatsApp Web UI, caption it, send.
-async function sendPhotoViaUI(client, absPath, caption) {
-  const page = client.pupPage;
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-  const sendVisible = async () => page.evaluate(() => {
-    const sel = 'span[data-icon="send"], [data-icon="send"], button[aria-label="Send"], div[aria-label="Send"], [data-testid="send"]';
-    return !!document.querySelector(sel);
-  }).catch(() => false);
-
-  const previewVisible = async () => page.evaluate(() => {
-    const sel = '[data-testid="preview-drawer"], [data-testid="preview-drawer-"], [role="dialog"] div[contenteditable="true"]';
-    return !!document.querySelector(sel);
-  }).catch(() => false);
-
-  const attachmentsReady = async () => (await sendVisible()) || (await previewVisible());
-
-  // Try EVERY file input until the attachment UI actually appears -
-  // the wrong first input silently attaches nothing.
-  const inputs = await page.$$('input[type=file]');
-  if (!inputs.length) throw new Error('no file inputs on page');
-  console.log(`  (found ${inputs.length} file input(s), trying each...)`);
-
-  let attached = false;
-  for (const input of inputs) {
-    try {
-      await input.uploadFile(absPath);
-    } catch (e) {
-      console.log(`  (upload via an input failed: ${e.message || e})`);
-      continue;
-    }
-    for (let i = 0; i < 6; i++) {
-      await sleep(1000);
-      if (await attachmentsReady()) { attached = true; break; }
-    }
-    if (attached) break;
-  }
-  if (!attached) {
-    // Diagnostic dump so we can see the real DOM state
-    const state = await page.evaluate(() => ({
-      inputs: Array.from(document.querySelectorAll('input[type=file]')).map(i => ({
-        accept: i.accept, testid: i.getAttribute('data-testid'), aria: i.getAttribute('aria-label')
-      })),
-      icons: Array.from(document.querySelectorAll('[data-icon]')).map(e => e.getAttribute('data-icon')).slice(0, 15),
-      dialogs: document.querySelectorAll('[role="dialog"]').length,
-      contenteditable: document.querySelectorAll('div[contenteditable="true"]').length,
-    })).catch((e) => ({ evalError: String(e && e.message || e) }));
-    console.log('  ⚠️ UI attach failed - DOM state:', JSON.stringify(state));
-    throw new Error('media not attached (send UI never appeared)');
-  }
-
-  // Caption inside the preview panel's composer.
-  const captionSel = [
-    'footer div[contenteditable="true"]',
-    '[data-testid="preview-drawer"] div[contenteditable="true"]',
-    'div[data-animate-modal-body] div[contenteditable="true"]',
-    'div[role="dialog"] div[contenteditable="true"]',
-    'div[contenteditable="true"][aria-label]'
-  ];
-  let captionOk = false;
-  for (const sel of captionSel) {
-    try {
-      const box = await page.$(sel);
-      if (box) {
-        await box.click();
-        await sleep(300);
-        if (caption) {
-          await page.evaluate((s) => {
-            const el = document.querySelector(s);
-            if (el) el.focus();
-          }, sel);
-          await page.keyboard.type(caption, { delay: 3 });
-          await sleep(400);
-        }
-        captionOk = true;
-        break;
-      }
-    } catch (e) {
-      console.log(`  (caption selector ${sel} failed: ${e.message || e})`);
-    }
-  }
-  if (!captionOk) console.log('  (no caption box found - sending photo without caption)');
-
-  const clicked = await page.evaluate(() => {
-    const btn = document.querySelector('span[data-icon="send"], [data-icon="send"], button[aria-label="Send"], div[aria-label="Send"], [data-testid="send"]');
-    if (btn) {
-      (btn.closest('button') || btn.parentElement || btn).click();
-      return true;
-    }
-    return false;
-  }).catch(() => false);
-  if (!clicked) {
-    await page.keyboard.press('Enter');
-  }
-
-  await sleep(3500);
-  return { sent: true, withCaption: captionOk };
 }
 
 // Get today's date in DD/MM/YYYY format
