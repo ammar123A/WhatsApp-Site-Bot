@@ -9,7 +9,7 @@ export async function handleMaterials(msg, args) {
   
   if (!subCommand || subCommand === 'today') {
     const today = getToday();
-    const entries = materialsDB.getByDate(today);
+    const entries = await materialsDB.getByDate(today);
     const msg_text = entries.length > 0 
       ? buildMaterialsMessage(entries)
       : '*No materials recorded today.*\n\nUse .addmaterial to add entry.';
@@ -17,7 +17,7 @@ export async function handleMaterials(msg, args) {
   }
   
   if (subCommand === 'recent') {
-    const entries = materialsDB.getRecent(parseInt(args[1]) || 10);
+    const entries = await materialsDB.getRecent(parseInt(args[1]) || 10);
     const msg_text = entries.length > 0
       ? '*📦 RECENT MATERIALS*\n\n' + buildMaterialsMessage(entries)
       : '*No recent materials found.*';
@@ -28,13 +28,13 @@ export async function handleMaterials(msg, args) {
   // If the command itself came as a photo caption, auto-link that photo.
   const idNum = parseInt(subCommand);
   if (/^\d+$/.test(subCommand)) {
-    const entry = materialsDB.getById(idNum);
+    const entry = await materialsDB.getById(idNum);
     if (entry) {
       if (msg.hasMedia) {
-        const picked = attachPendingPhotos(materialsDB, entry.id);
+        const picked = await attachPendingPhotos(materialsDB, entry.id);
         console.log(`  → auto-attached ${picked} photo(s) to material #${entry.id} (caption command)`);
       }
-      const freshEntry = materialsDB.getById(entry.id);
+      const freshEntry = await materialsDB.getById(entry.id);
       let msg_text = `*📦 MATERIAL #${freshEntry.id}*\n\n`;
       msg_text += `*${freshEntry.material_name}*\n`;
       msg_text += `📂 Category: ${freshEntry.category}\n`;
@@ -52,7 +52,7 @@ export async function handleMaterials(msg, args) {
   }
   
   // Search by name
-  const entries = materialsDB.getByName(subCommand);
+  const entries = await materialsDB.getByName(subCommand);
   if (entries.length > 0) {
     return msg.reply(`*📦 Materials matching "${subCommand}"*\n\n` + buildMaterialsMessage(entries));
   }
@@ -62,7 +62,7 @@ export async function handleMaterials(msg, args) {
 
 // Handle stock command
 export async function handleStock(msg) {
-  const stocks = materialsDB.getStockSummary();
+  const stocks = await materialsDB.getStockSummary();
   return msg.reply(buildStockSummary(stocks));
 }
 
@@ -106,10 +106,10 @@ export async function handleAddMaterial(msg, messageBody) {
   };
   
   try {
-    const result = materialsDB.add(entry);
+    const result = await materialsDB.add(entry);
     let photoNote = '';
     if (msg.hasMedia) {
-      const picked = attachPendingPhotos(materialsDB, result.lastInsertRowid);
+      const picked = await attachPendingPhotos(materialsDB, result.lastInsertRowid);
       if (picked > 0) {
         photoNote = `📸 *${picked} photo(s) auto-attached.*\n`;
       }
@@ -139,7 +139,7 @@ export async function handleDeleteMaterial(msg, args) {
   }
   
   try {
-    const result = materialsDB.delete(id);
+    const result = await materialsDB.delete(id);
     if (result.changes > 0) {
       return msg.reply(`*✅ Material #${id} deleted.*`);
     }
