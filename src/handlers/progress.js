@@ -9,7 +9,7 @@ export async function handleProgress(msg, args) {
   
   if (!subCommand || subCommand === 'today') {
     const today = getToday();
-    const entries = progressDB.getByDate(today);
+    const entries = await progressDB.getByDate(today);
     const msg_text = entries.length > 0 
       ? buildProgressMessage(entries)
       : '*No progress recorded today.*\n\nUse .addprogress to add entry.';
@@ -19,7 +19,7 @@ export async function handleProgress(msg, args) {
   if (subCommand === 'week') {
     const weekStart = getWeekStart();
     const today = getToday();
-    const entries = progressDB.getByDateRange(weekStart, today);
+    const entries = await progressDB.getByDateRange(weekStart, today);
     const msg_text = entries.length > 0
       ? `*📊 WEEKLY PROGRESS (${weekStart} - ${today})*\n\n` + buildProgressMessage(entries)
       : '*No progress recorded this week.*';
@@ -29,7 +29,7 @@ export async function handleProgress(msg, args) {
   if (subCommand === 'month') {
     const monthStart = getMonthStart();
     const today = getToday();
-    const entries = progressDB.getByDateRange(monthStart, today);
+    const entries = await progressDB.getByDateRange(monthStart, today);
     const msg_text = entries.length > 0
       ? `*📊 MONTHLY PROGRESS (${monthStart} - ${today})*\n\n` + buildProgressMessage(entries)
       : '*No progress recorded this month.*';
@@ -39,13 +39,13 @@ export async function handleProgress(msg, args) {
   // View a single entry by numeric id (includes attached photo).
   // If the command itself came as a photo caption, auto-link that photo.
   if (/^\d+$/.test(subCommand)) {
-    const entry = progressDB.getById(parseInt(subCommand));
+    const entry = await progressDB.getById(parseInt(subCommand));
     if (entry) {
       if (msg.hasMedia) {
-        const picked = attachPendingPhotos(progressDB, entry.id);
+        const picked = await attachPendingPhotos(progressDB, entry.id);
         console.log(`  → auto-attached ${picked} photo(s) to progress #${entry.id} (caption command)`);
       }
-      const freshEntry = progressDB.getById(entry.id);
+      const freshEntry = await progressDB.getById(entry.id);
       let msg_text = `*📋 PROGRESS #${freshEntry.id}*\n\n`;
       msg_text += `📂 Category: ${freshEntry.category}\n`;
       msg_text += `📝 Description: ${freshEntry.description}\n`;
@@ -60,7 +60,7 @@ export async function handleProgress(msg, args) {
   
   // Try to parse as date
   const dateStr = parseDate(subCommand);
-  const entries = progressDB.getByDate(dateStr);
+  const entries = await progressDB.getByDate(dateStr);
   if (entries.length > 0) {
     return msg.reply(buildProgressMessage(entries));
   }
@@ -99,10 +99,10 @@ export async function handleAddProgress(msg, messageBody) {
   };
   
   try {
-    const result = progressDB.add(entry);
+    const result = await progressDB.add(entry);
     let photoNote = '';
     if (msg.hasMedia) {
-      const picked = attachPendingPhotos(progressDB, result.lastInsertRowid);
+      const picked = await attachPendingPhotos(progressDB, result.lastInsertRowid);
       if (picked > 0) {
         photoNote = `📸 *${picked} photo(s) auto-attached.*\n`;
       }
@@ -130,7 +130,7 @@ export async function handleDeleteProgress(msg, args) {
   }
   
   try {
-    const result = progressDB.delete(id);
+    const result = await progressDB.delete(id);
     if (result.changes > 0) {
       return msg.reply(`*✅ Progress #${id} deleted.*`);
     }

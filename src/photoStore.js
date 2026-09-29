@@ -1,12 +1,6 @@
-import { writeFileSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import config from '../config.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// data/photos/<YYYY-MM-DD>/ is where all site photos land
-const PHOTOS_ROOT = join(__dirname, '..', 'data', 'photos');
+// Site photos land in the Supabase Storage bucket under <YYYY-MM-DD>/
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -26,7 +20,7 @@ function getMsgId(msg) {
   return null;
 }
 
-// Download a photo from a WhatsApp message and save it to disk.
+// Download a photo from a WhatsApp message and upload it to Supabase Storage.
 // Throws on failure so the caller can retry.
 export async function saveMessagePhoto(msg, injectedClient) {
   let media = null;
@@ -210,8 +204,6 @@ export async function saveMessagePhoto(msg, injectedClient) {
 
   const now = new Date();
   const dayFolder = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const dir = join(PHOTOS_ROOT, dayFolder);
-  mkdirSync(dir, { recursive: true });
 
   let ext = '.jpg';
   if (media.mimetype) {
@@ -222,12 +214,43 @@ export async function saveMessagePhoto(msg, injectedClient) {
 
   const timestamp = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
   const filename = `${timestamp}-${now.getTime()}${ext}`;
-  const absolutePath = join(dir, filename);
+  const key = `${dayFolder}/${filename}`;
 
-  const buffer = Buffer.from(media.data, 'base64');
-  writeFileSync(absolutePath, buffer);
+  await uploadPhoto(key, Buffer.from(media.data, 'base64'), media.mimetype || 'image/jpeg');
 
-  const rel = join('data', 'photos', dayFolder, filename).split('\\').join('/');
+  return { path: key, dir: dayFolder, filename };
+}
 
-  return { path: rel, absolutePath, dir, filename };
+// Supabase Storage (REST, private bucket). Photo "paths" in the DB are object
+// keys inside the bucket, e.g. 2026-09-28/14-05-11-1790000000000.jpg
+const storageUrl = (key) => `${config.supabaseUrl}/storage/v1/object/${config.photoBucket}/${key}`;
+const authHeaders = () => ({
+  Authorization: `Bearer ${config.supabaseServiceKey}`,
+  apikey: config.supabaseServiceKey,
+});
+
+// Throws on failure so handlePhoto's retry loop kicks in.
+export async function uploadPhoto(key, buffer, mimetype, upsert = false) {
+  const res = await fetch(storageUrl(key), {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': mimetype, 'x-upsert': String(upsert) },
+    body: buffer,
+  });
+  if (!res.ok) throw new Error(`photo upload failed: ${res.status} ${await res.text()}`);
+}
+
+// Returns { data: base64, mimetype, filename } or null if the photo is missing.
+export async function downloadPhoto(key) {
+  try {
+    const res = await fetch(storageUrl(key), { headers: authHeaders() });
+    if (!res.ok) {
+      console.log(`  ⚠️ Photo ${key} not downloadable: ${res.status}`);
+      return null;
+    }
+    const data = Buffer.from(await res.arrayBuffer()).toString('base64');
+    return { data, mimetype: res.headers.get('content-type') || 'image/jpeg', filename: key.split('/').pop() };
+  } catch (e) {
+    console.log(`  ⚠️ Photo ${key} download error: ${e.message || e}`);
+    return null;
+  }
 }

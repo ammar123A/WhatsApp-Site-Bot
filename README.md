@@ -109,7 +109,7 @@ By: Site Engineer
 ```
 
 ### Photos
-Every photo sent in the group is saved to `data/photos/<YYYY-MM-DD>/`.
+Every photo sent in the group is saved to the `site-photos` bucket (one folder per day). The bot reacts 📸 to confirm; use `.photo` to see the saved path.
 
 | Command | Description |
 |---------|-------------|
@@ -185,7 +185,14 @@ Concrete, Steel, Timber, Bricks, Sand, Aggregate, Cement, Pipes, Electrical, Plu
 
 ## Data Storage
 
-All data is stored in SQLite database at `./data/sitebot.db`
+Records are stored in Supabase Postgres, and photos in the private Supabase Storage bucket `site-photos` (one folder per day).
+
+One-time setup:
+1. Create a project at [supabase.com](https://supabase.com) (region: Singapore).
+2. SQL Editor → paste [supabase/schema.sql](supabase/schema.sql) → Run.
+3. Storage → New bucket → name `site-photos`, leave **Public** off.
+4. Fill `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and `DATABASE_URL` in `.env` (see `.env.example`).
+5. Moving from the old local SQLite version? Run `node scripts/migrate-to-supabase.js` once.
 
 ## Tips for Site Use
 
@@ -194,6 +201,19 @@ All data is stored in SQLite database at `./data/sitebot.db`
 3. **Issues**: Report issues immediately with photos
 4. **Reports**: Generate daily report before leaving site
 5. **Attendance**: Record attendance at start of day
+
+## Keeping the Bot's Number Safe
+
+This bot uses whatsapp-web.js, an unofficial client. That is against WhatsApp's Terms, and WhatsApp can ban the linked number without warning. To keep the risk low:
+
+- **Use a dedicated SIM**, never a personal or important number. Warm it up with normal human use for 1–2 weeks before linking the bot. Turn on two-step verification, and ask group members to save it as a contact.
+- **Keep the phone online.** A linked device drops if the phone is offline for about 14 days.
+- **Don't re-link needlessly.** `run.bat` keeps the session across restarts and wipes it only when WhatsApp revoked it (exit code 2). Don't delete `.wwebjs_auth` by hand unless you have to.
+- **Reply only, never broadcast.** No scheduled, outbound or bulk messages, and no DMs to people who didn't message first. Outgoing messages are already spaced 1–2.5s apart.
+- **If sends start failing, stop and investigate.** Don't retry harder, because failing sends may mean WhatsApp is flagging the session.
+- **Never run `scripts/test-*.js` against the production number.**
+- **Update whatsapp-web.js only on purpose.** Afterwards, check that `scripts/wa-patch.js` still logs that it applied, because it patches exact strings from v1.34.7.
+- **Tell the group.** Pin a message saying the bot stores photos and site records in Supabase. This is the PDPA notice.
 
 ## License
 
