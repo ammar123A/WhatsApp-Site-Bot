@@ -8,7 +8,7 @@ export async function handleIssues(msg, args) {
   const subCommand = args[0]?.toLowerCase();
   
   if (!subCommand || subCommand === 'open') {
-    const issues = issuesDB.getOpenIssues();
+    const issues = await issuesDB.getOpenIssues();
     const msg_text = issues.length > 0 
       ? buildIssuesMessage(issues)
       : '*No open issues.* 🎉';
@@ -19,9 +19,9 @@ export async function handleIssues(msg, args) {
     const status = args[1]?.toLowerCase();
     let issues;
     if (status && config.issueStatus[status.toUpperCase()]) {
-      issues = issuesDB.getByStatus(status);
+      issues = await issuesDB.getByStatus(status);
     } else {
-      issues = issuesDB.getRecent(parseInt(args[1]) || 20);
+      issues = await issuesDB.getRecent(parseInt(args[1]) || 20);
     }
     const msg_text = issues.length > 0 
       ? '*📋 ALL ISSUES*\n\n' + buildIssuesMessage(issues)
@@ -30,7 +30,7 @@ export async function handleIssues(msg, args) {
   }
   
   if (subCommand === 'stats') {
-    const stats = issuesDB.getStats();
+    const stats = await issuesDB.getStats();
     return msg.reply(buildIssueStats(stats));
   }
   
@@ -38,16 +38,16 @@ export async function handleIssues(msg, args) {
   // If the command itself came as a photo caption, auto-link that photo.
   const issueId = parseInt(subCommand);
   if (issueId) {
-    const issue = issuesDB.getById(issueId);
+    const issue = await issuesDB.getById(issueId);
     if (!issue) {
       return msg.reply(`*Issue #${issueId} not found.*`);
     }
 
     if (msg.hasMedia) {
-      const picked = attachPendingPhotos(issuesDB, issue.id);
+      const picked = await attachPendingPhotos(issuesDB, issue.id);
       console.log(`  → auto-attached ${picked} photo(s) to issue #${issue.id} (caption command)`);
     }
-    const freshIssue = issuesDB.getById(issueId);
+    const freshIssue = await issuesDB.getById(issueId);
 
     const priorityEmoji = { urgent: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
     const statusEmoji = { open: '⬜', in_progress: '🔄', resolved: '✅', closed: '🔒' };
@@ -106,11 +106,11 @@ export async function handleAddIssue(msg, messageBody) {
   };
   
   try {
-    const result = issuesDB.add(entry);
+    const result = await issuesDB.add(entry);
     const priorityEmoji = { urgent: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
     let photoNote = '';
     if (msg.hasMedia) {
-      const picked = attachPendingPhotos(issuesDB, result.lastInsertRowid);
+      const picked = await attachPendingPhotos(issuesDB, result.lastInsertRowid);
       if (picked > 0) {
         photoNote = `📸 *${picked} photo(s) auto-attached.*\n`;
       }
@@ -143,12 +143,12 @@ export async function handleResolve(msg, args) {
   const resolution = args.slice(1).join(' ') || 'Resolved';
   
   try {
-    const issue = issuesDB.getById(id);
+    const issue = await issuesDB.getById(id);
     if (!issue) {
       return msg.reply(`*Issue #${id} not found.*`);
     }
     
-    issuesDB.updateStatus(id, 'resolved', resolution);
+    await issuesDB.updateStatus(id, 'resolved', resolution);
     return msg.reply(`*✅ Issue #${id} resolved!*\n\n*Resolution:* ${resolution}`);
   } catch (error) {
     console.error('Error resolving issue:', error);
@@ -166,12 +166,12 @@ export async function handleAssign(msg, args) {
   const assignTo = args.slice(1).join(' ');
   
   try {
-    const issue = issuesDB.getById(id);
+    const issue = await issuesDB.getById(id);
     if (!issue) {
       return msg.reply(`*Issue #${id} not found.*`);
     }
     
-    issuesDB.update(id, { assignedTo: assignTo });
+    await issuesDB.update(id, { assignedTo: assignTo });
     return msg.reply(`*✅ Issue #${id} assigned to ${assignTo}.*`);
   } catch (error) {
     console.error('Error assigning issue:', error);
@@ -189,12 +189,12 @@ export async function handleUpdatePriority(msg, args) {
   }
   
   try {
-    const issue = issuesDB.getById(id);
+    const issue = await issuesDB.getById(id);
     if (!issue) {
       return msg.reply(`*Issue #${id} not found.*`);
     }
     
-    issuesDB.update(id, { priority });
+    await issuesDB.update(id, { priority });
     return msg.reply(`*✅ Issue #${id} priority updated to ${priority.toUpperCase()}.*`);
   } catch (error) {
     console.error('Error updating priority:', error);

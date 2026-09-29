@@ -17,10 +17,9 @@ for /f "tokens=2 delims=," %%P in ('tasklist /FI "IMAGENAME eq chrome.exe" /FO C
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'index.js' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 timeout /t 2 /nobreak >nul
 
-REM Wipe the stored session so a FRESH QR always shows
-echo [2/3] Resetting WhatsApp session (fresh QR)...
-rmdir /s /q ".wwebjs_auth" 2>nul
-del /q ".wwebjs_auth\*" 2>nul
+REM Keep the stored session - re-linking a new device on every start is a
+REM strong automation signal to WhatsApp. It is only wiped on exit code 2.
+echo [2/3] Keeping existing WhatsApp session...
 
 echo [3/3] Starting bot...
 echo.
@@ -36,7 +35,14 @@ if "%EXITCODE%"=="0" (
   exit /b 0
 )
 
-echo Restarting in 5 seconds (Ctrl+C in the next window breaks here)...
-timeout /t 5 /nobreak >nul
+REM Exit code 2 = session revoked by WhatsApp - wipe it so a fresh QR shows
+if "%EXITCODE%"=="2" (
+  echo Stale session - wiping it, a fresh QR will show.
+  rmdir /s /q ".wwebjs_auth" 2>nul
+)
+
+REM Long delay so a crash loop doesn't hammer WhatsApp with logins
+echo Restarting in 60 seconds (Ctrl+C breaks here)...
+timeout /t 60 /nobreak >nul
 echo.
 goto loop
