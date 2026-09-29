@@ -75,6 +75,20 @@ const client = new Client({
   }
 });
 
+// Every send (msg.reply included) routes through client.sendMessage - queue
+// them with a short random gap so bursts don't look robotic to WhatsApp.
+// ponytail: one global queue; per-chat queues if we ever serve >1 chat
+const rawSend = client.sendMessage.bind(client);
+let sendChain = Promise.resolve();
+client.sendMessage = (...args) => {
+  const p = sendChain.then(async () => {
+    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1500));
+    return rawSend(...args);
+  });
+  sendChain = p.catch(() => {});
+  return p;
+};
+
 // QR Code generation - terminal only, no browser window
 client.on('qr', (qr) => {
   console.log('\n📱 Scan this QR code with WhatsApp on your phone:\n');
@@ -111,8 +125,8 @@ const readyWaitTimer = setInterval(() => {
 // ── Session health watchdog ──────────────────────────────────────────────
 // If 'ready' never fires within a sane window, the stored session is stale
 // (WhatsApp silently revoked it). We can't delete locked files from inside
-// the running process on Windows (EPERM), so we exit cleanly and let the
-// run.bat wrapper wipe the session and show a fresh QR on next start.
+// the running process on Windows (EPERM), so we exit with code 2 and the
+// run.bat wrapper wipes the session and shows a fresh QR on next start.
 // NOTE: only expires if NO QR was shown recently - so a user mid-scan is
 // never interrupted.
 let lastQrAt = 0;
@@ -183,11 +197,11 @@ async function probePage() {
 }
 
 // Exit cleanly when the WhatsApp page is unresponsive - the run.bat
-// wrapper will wipe the session and restart with a fresh QR.
+// wrapper restarts Chrome and keeps the session (no new QR / device link).
 async function wedgedExit() {
-  console.log('\n🧹 WhatsApp Web page is unresponsive - exiting so run.bat can restart with a fresh session.');
+  console.log('\n🧹 WhatsApp Web page is unresponsive - exiting so run.bat can restart it.');
   try { await client.destroy(); } catch (e) { /* ignore */ }
-  process.exit(3); // exit code 3 = wedged page, run.bat wipes + restarts
+  process.exit(3); // exit code 3 = wedged page, run.bat restarts (session kept)
 }
 
 // Probe every 60s once we're connected (less page contention)
@@ -314,12 +328,10 @@ client.on('message', async (msg) => {
       if (result && result.saved) {
         const saved = result.saved;
         console.log(`📸 Photo saved by ${senderName}: ${config.photoBucket}/${saved.path}`);
+        // React instead of replying - one text message per photo is a burst
+        // of automated sends. .photo still shows the saved path.
         if (!isCommand) {
-          await msg.reply(
-            `📸 *Photo recorded:* \`${saved.filename}\`\n\n` +
-            `☁️ Saved to:\n\`${config.photoBucket}/${saved.path}\`\n\n` +
-            `_Tip: use \`.attach issue <id>\`, \`.attach material <id>\`, or \`.attach progress <id>\` to link it to a record._`
-          );
+          await msg.react('📸');
         }
       } else if (result && result.error) {
         await msg.reply(
