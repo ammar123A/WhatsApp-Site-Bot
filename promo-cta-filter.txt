@@ -1,0 +1,9 @@
+drawbox=x=0:y=0:w=1080:h=1920:color=0x07111f@1:t=fill,
+drawbox=x=0:y=0:w=1080:h=18:color=0x22c55e@1:t=fill,
+drawbox=x=0:y=1902:w=1080:h=18:color=0x22c55e@1:t=fill,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='STOP CHASING':fontcolor=white:fontsize=92:x=(w-text_w)/2:y=420,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='SITE UPDATES':fontcolor=0xfacc15:fontsize=92:x=(w-text_w)/2:y=540,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='Let Kerani organise the site for you.':fontcolor=0x22c55e:fontsize=42:x=(w-text_w)/2:y=760,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='KERANI':fontcolor=0x22c55e:fontsize=120:x=(w-text_w)/2:y=1070,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='WhatsApp construction site supervisor':fontcolor=white:fontsize=38:x=(w-text_w)/2:y=1240,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='Progress  |  Materials  |  Attendance  |  Issues':fontcolor=0xfacc15:fontsize=30:x=(w-text_w)/2:y=1340

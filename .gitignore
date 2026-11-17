@@ -3,6 +3,11 @@ node_modules/
 
 # Environment
 .env
+# Stray copy without the dot - contains secrets, must never be committed
+env
+
+# Login QR image (regenerated on every start)
+qr-latest.png
 
 # Database
 data/
@@ -13,6 +18,15 @@ data/
 
 # Logs
 *.log
+*.log.prev
+*.err
+*.err.log
+
+# Local browser/test runtime artifacts
+.chrome-launch-test*/
+.chrome-normal-test/
+.edge-launch-test/
+*.pid
 
 # OS
 .DS_Store
@@ -21,3 +35,4 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+site-groups.json

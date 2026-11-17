@@ -1,0 +1,12 @@
+scale=1200:2133:force_original_aspect_ratio=increase,crop=1080:1920:x='60+50*cos(PI*t/5.5)':y='100+55*sin(PI*t/5.5)',
+drawbox=x=0:y=0:w=1080:h=400:color=0x07111f@0.82:t=fill,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='ONE CHAT. EVERY UPDATE.':fontcolor=white:fontsize=64:x=58:y=90,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='Organised by site and exact date':fontcolor=0x22c55e:fontsize=38:x=62:y=190,
+drawbox=x=52:y=930:w=500:h=300:color=white@0.95:t=fill,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='ISSUE TRACKER':fontcolor=0xdc2626:fontsize=34:x=88:y=980,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='Issue #13  OPEN':fontcolor=0x0f172a:fontsize=40:x=88:y=1050,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='close it when fixed':fontcolor=0x475569:fontsize=30:x=88:y=1120,
+drawbox=x=570:y=1250:w=450:h=290:color=0x07111f@0.92:t=fill,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='REMINDER':fontcolor=0xfacc15:fontsize=38:x=610:y=1300,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='voice alert before':fontcolor=white:fontsize=32:x=610:y=1370,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='your meeting':fontcolor=0x22c55e:fontsize=32:x=610:y=1420
