@@ -19,9 +19,14 @@
     "better-sqlite3": "^11.0.0",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
+    "pdf-lib": "^1.17.1",
     "postgres": "^3.4.9",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.23.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true,
+    "puppeteer@24.38.0": true
   }
 }

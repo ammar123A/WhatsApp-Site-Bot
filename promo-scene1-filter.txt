@@ -1,0 +1,13 @@
+scale=1200:2133:force_original_aspect_ratio=increase,crop=1080:1920:x='60+40*sin(PI*t/6)':y='100+60*cos(PI*t/6)',
+drawbox=x=0:y=0:w=1080:h=360:color=0x07111f@0.78:t=fill,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='MEET KERANI':fontcolor=0x22c55e:fontsize=82:x=64:y=82,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='Your site supervisor in WhatsApp':fontcolor=white:fontsize=43:x=68:y=205,
+drawbox=x=570:y=770:w=450:h=330:color=0x07111f@0.9:t=fill,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='ATTENDANCE':fontcolor=0xfacc15:fontsize=42:x=610:y=820,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='3 workers logged':fontcolor=white:fontsize=38:x=610:y=890,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='Ali  |  Abu  |  Iman':fontcolor=0x22c55e:fontsize=34:x=610:y=955,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='photo saved by Kerani':fontcolor=0xcbd5e1:fontsize=28:x=610:y=1020,
+drawbox=x=48:y=1280:w=600:h=260:color=white@0.94:t=fill,
+drawtext=fontfile='C\:/Windows/Fonts/segoeuib.ttf':text='PROGRESS':fontcolor=0x0f172a:fontsize=38:x=85:y=1320,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='Pipe 400mm installed':fontcolor=0x0f172a:fontsize=34:x=85:y=1380,
+drawtext=fontfile='C\:/Windows/Fonts/segoeui.ttf':text='photo + description = recorded':fontcolor=0x16a34a:fontsize=30:x=85:y=1450
