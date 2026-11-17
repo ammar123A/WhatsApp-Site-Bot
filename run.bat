@@ -15,7 +15,11 @@ for /f "tokens=2 delims=," %%P in ('tasklist /FI "IMAGENAME eq chrome.exe" /FO C
   powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -match 'wwebjs_auth' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 )
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'index.js' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -match 'wwebjs_auth' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 timeout /t 2 /nobreak >nul
+REM A browser child can appear just after the first cleanup during a failed
+REM Puppeteer launch. Sweep once more before starting the next attempt.
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -match 'wwebjs_auth' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 
 REM Keep the stored session - re-linking a new device on every start is a
 REM strong automation signal to WhatsApp. It is only wiped on exit code 2.
@@ -41,8 +45,9 @@ if "%EXITCODE%"=="2" (
   rmdir /s /q ".wwebjs_auth" 2>nul
 )
 
-REM Long delay so a crash loop doesn't hammer WhatsApp with logins
-echo Restarting in 60 seconds (Ctrl+C breaks here)...
-timeout /t 60 /nobreak >nul
+REM A detached WhatsApp frame is a recoverable page crash, not a revoked login.
+REM Restart quickly while keeping the stored session.
+echo Restarting in 8 seconds (Ctrl+C breaks here)...
+timeout /t 8 /nobreak >nul
 echo.
 goto loop

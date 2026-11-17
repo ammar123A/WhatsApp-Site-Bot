@@ -1,20 +1,21 @@
 import { issuesDB } from '../database.js';
-import { getToday, parseArgs, buildIssuesMessage, buildIssueStats, replyWithPhoto, getRecordPhotos } from '../utils.js';
-import { attachPendingPhotos } from './photos.js';
+import { getToday, parseArgs, buildCompactIssuesMessage, buildIssuesMessage, buildIssueStats, replyWithPhoto, replyListWithPhotos, getRecordPhotos, getSenderName } from '../utils.js';
+import { attachPendingPhotos, getPhotoBatchSize } from './photos.js';
+import { pendingCount } from './files.js';
 import config from '../../config.js';
 
 // Handle issues commands
 export async function handleIssues(msg, args) {
   const subCommand = args[0]?.toLowerCase();
-  
+
   if (!subCommand || subCommand === 'open') {
     const issues = await issuesDB.getOpenIssues();
-    const msg_text = issues.length > 0 
-      ? buildIssuesMessage(issues)
+    const msg_text = issues.length > 0
+      ? buildCompactIssuesMessage(issues)
       : '*No open issues.* 🎉';
-    return msg.reply(msg_text);
+    return replyListWithPhotos(msg, msg_text, issues, 'Issue');
   }
-  
+
   if (subCommand === 'all') {
     const status = args[1]?.toLowerCase();
     let issues;
@@ -23,10 +24,10 @@ export async function handleIssues(msg, args) {
     } else {
       issues = await issuesDB.getRecent(parseInt(args[1]) || 20);
     }
-    const msg_text = issues.length > 0 
-      ? '*📋 ALL ISSUES*\n\n' + buildIssuesMessage(issues)
+    const msg_text = issues.length > 0
+      ? buildCompactIssuesMessage(issues)
       : '*No issues found.*';
-    return msg.reply(msg_text);
+    return replyListWithPhotos(msg, msg_text, issues, 'Issue');
   }
   
   if (subCommand === 'stats') {
@@ -44,89 +45,79 @@ export async function handleIssues(msg, args) {
     }
 
     if (msg.hasMedia) {
-      const picked = await attachPendingPhotos(issuesDB, issue.id);
+      const picked = await attachPendingPhotos(issuesDB, issue.id, msg.from);
       console.log(`  → auto-attached ${picked} photo(s) to issue #${issue.id} (caption command)`);
     }
     const freshIssue = await issuesDB.getById(issueId);
 
-    const priorityEmoji = { urgent: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
     const statusEmoji = { open: '⬜', in_progress: '🔄', resolved: '✅', closed: '🔒' };
 
-    let msg_text = `*ISSUE #${freshIssue.id}*\n\n`;
-    msg_text += `${priorityEmoji[freshIssue.priority] || '⚪'} *${freshIssue.title}*\n`;
-    msg_text += `📂 Category: ${freshIssue.category}\n`;
-    msg_text += `📊 Priority: ${freshIssue.priority.toUpperCase()}\n`;
-    msg_text += `${statusEmoji[freshIssue.status] || '❓'} Status: ${freshIssue.status.replace('_', ' ').toUpperCase()}\n`;
-    msg_text += `📝 Description: ${freshIssue.description}\n`;
-    if (freshIssue.location) msg_text += `📍 Location: ${freshIssue.location}\n`;
-    if (freshIssue.reported_by) msg_text += `👤 Reported by: ${freshIssue.reported_by}\n`;
-    if (freshIssue.assigned_to) msg_text += `👷 Assigned to: ${freshIssue.assigned_to}\n`;
-    if (freshIssue.resolution) msg_text += `✅ Resolution: ${freshIssue.resolution}\n`;
-    if (freshIssue.resolved_at) msg_text += `📅 Resolved at: ${freshIssue.resolved_at}\n`;
+    // Trimmed on purpose: id, the issue, the status. Category, priority, location,
+    // reporter and assignee were noise when you just want to recognise a record.
+    let msg_text = `*ISSUE #${freshIssue.id}*\n`;
+    msg_text += `*${freshIssue.title}*\n`;
+    msg_text += `${statusEmoji[freshIssue.status] || '❓'} ${freshIssue.status.replace('_', ' ').toUpperCase()}\n`;
+    if (freshIssue.description) msg_text += `\n${freshIssue.description}\n`;
+    if (freshIssue.resolution) msg_text += `\n✅ ${freshIssue.resolution}\n`;
 
     return replyWithPhoto(msg, msg_text, getRecordPhotos(freshIssue));
   }
-  
+
   return msg.reply('*Usage:* .issues [open|all|stats|id]');
+}
+
+export async function handleIssuesForDate(msg, date, { openOnly = true } = {}) {
+  const rows = await issuesDB.getByDate(date);
+  const issues = openOnly ? rows.filter((issue) => ['open', 'in_progress'].includes(String(issue.status).toLowerCase())) : rows;
+  const text = issues.length > 0 ? buildCompactIssuesMessage(issues) : `*No issues on ${date}.*`;
+  return replyListWithPhotos(msg, text, issues, 'Issue');
 }
 
 // Handle addissue command
 export async function handleAddIssue(msg, messageBody) {
+  if (getPhotoBatchSize(msg.from) === 0 && pendingCount(msg.from) === 0) {
+    return msg.reply('*Gambar atau file bukti diperlukan.* Hantar evidence dulu sebelum issue direkod.');
+  }
   const args = parseArgs(messageBody, 1);
-  
-  if (!args.title || !args.description) {
+  const title = args.title || args.problem;
+  const description = args.description || args.detail;
+
+  if (!title || !description) {
     return msg.reply(
-      '*Usage:* .addissue\n\n' +
-      'Format:\n' +
+      '*Usage:* `.addissue`\n\n' +
       '```\n' +
       '.addissue\n' +
       'Title: Water leak\n' +
       'Description: Major leak at 2nd floor bathroom\n' +
-      'Category: MEP\n' +
-      'Priority: high\n' +
       'Location: Block A L2\n' +
-      'By: Site Engineer\n' +
       '```\n\n' +
       `*Categories:* ${config.categories.join(', ')}\n` +
-      '*Priority:* low, medium, high, urgent'
+      '*Priority:* low, medium, high, urgent\n' +
+      '_Reported by bot detect sendiri._'
     );
   }
   
   const entry = {
     date: getToday(),
-    title: args.title,
-    description: args.description,
+    title,
+    description,
     category: args.category || 'Others',
     priority: args.priority || 'medium',
     status: 'open',
     location: args.location,
-    reportedBy: args.by || args.reported,
+    reportedBy: getSenderName(msg),
     assignedTo: args.assigned || args.assign,
     photo: null
   };
   
   try {
     const result = await issuesDB.add(entry);
-    const priorityEmoji = { urgent: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
-    let photoNote = '';
     if (msg.hasMedia) {
-      const picked = await attachPendingPhotos(issuesDB, result.lastInsertRowid);
-      if (picked > 0) {
-        photoNote = `📸 *${picked} photo(s) auto-attached.*\n`;
-      }
+      const picked = await attachPendingPhotos(issuesDB, result.lastInsertRowid, msg.from);
+      console.log(`📸 ${picked} photo(s) attached to issue #${result.lastInsertRowid}`);
     }
-
-    return msg.reply(
-      '*✅ Issue Reported!*\n\n' +
-      photoNote +
-      `${priorityEmoji[entry.priority] || '⚪'} *#${result.lastInsertRowid} ${entry.title}*\n` +
-      `📂 *Category:* ${entry.category}\n` +
-      `📊 *Priority:* ${entry.priority.toUpperCase()}\n` +
-      `📝 *Description:* ${entry.description}\n` +
-      (entry.location ? `📍 *Location:* ${entry.location}\n` : '') +
-      (entry.reportedBy ? `👤 *Reported by:* ${entry.reportedBy}\n` : '') +
-      (entry.assignedTo ? `👷 *Assigned to:* ${entry.assignedTo}\n` : '')
-    );
+    console.log(`✅ issue #${result.lastInsertRowid} recorded`);
+    return null; // silent on success
   } catch (error) {
     console.error('Error adding issue:', error);
     return msg.reply('*❌ Error reporting issue. Please try again.*');

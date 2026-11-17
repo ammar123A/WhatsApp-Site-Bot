@@ -1,17 +1,27 @@
 // Verifies: multi-photo reply ordering + auto-attach helper (no WhatsApp needed)
-import { writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { replyWithPhoto } from '../src/utils.js';
-import { attachPendingPhotos, getPhotoBatchPaths, getPhotoBatchSize, clearPhotoBatch } from '../src/handlers/photos.js';
-import { issuesDB } from '../src/database.js';
+import { clearPhotoBatch } from '../src/handlers/photos.js';
+import config from '../config.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const photoDir = join(__dirname, '..', 'data', 'photos', '2026-09-24');
-mkdirSync(photoDir, { recursive: true });
-writeFileSync(join(photoDir, 't1.jpg'), Buffer.from('a'));
-writeFileSync(join(photoDir, 't2.jpg'), Buffer.from('b'));
-writeFileSync(join(photoDir, 't3.jpg'), Buffer.from('c'));
+// Real object keys in the photo bucket. The old version used local paths
+// ("data/photos/2026-09-24/t1.jpg") that stopped existing once photos moved to
+// Supabase, so every download returned null and the send assertions failed for a
+// reason that had nothing to do with the code under test.
+const PATHS = [
+  'SiteMate/03-10-2026/17-22-41.jpg',
+  'SiteMate/03-10-2026/17-01-51.jpg',
+  '2026-10-03/11-57-42-1790999862080.jpg',
+];
+import { ensureSiteSchema, runInSite, sql, issuesDB } from '../src/database.js';
+
+// Pinned to one site and scoped: the old version reached for the newest real
+// issue and overwrote its photos column, corrupting live site data on every run.
+const [siteRow] = await sql`SELECT site_name, group_id FROM public.sites WHERE schema_name='site_sitemate_f85953'`;
+const site = await ensureSiteSchema({ siteName: siteRow.site_name, groupId: siteRow.group_id });
+const inSite = (fn) => runInSite(site, fn);
+
+console.log(`photo bucket: ${config.photoBucket}`);
+console.log(`keys: ${PATHS.join(', ')}\n`);
 
 let failed = false;
 const ok = (n, c) => { console.log(`${c ? '✅' : '❌'} ${n}`); if (!c) failed = true; };
@@ -24,7 +34,7 @@ const ok = (n, c) => { console.log(`${c ? '✅' : '❌'} ${n}`); if (!c) failed 
     reply: async (text) => { sent.push({ kind: 'text', text }); },
     client: { sendMessage: async (chatId, media, opts) => { sent.push({ kind: 'media', chatId, hasCaption: !!opts.caption, caption: opts.caption }); } },
   };
-  const paths = ['data/photos/2026-09-24/t1.jpg', 'data/photos/2026-09-24/t2.jpg', 'data/photos/2026-09-24/t3.jpg'];
+  const paths = [...PATHS];
   await replyWithPhoto(mockMsg, 'ISSUE #7 summary', paths);
   const captioned = sent.filter(s => s.kind === 'media' && s.hasCaption);
   const textMsgs = sent.filter(s => s.kind === 'text');
@@ -41,28 +51,27 @@ const ok = (n, c) => { console.log(`${c ? '✅' : '❌'} ${n}`); if (!c) failed 
     reply: async (t) => sent.push({ kind: 'text', t }),
     client: { sendMessage: async (chatId, media, opts) => sent.push({ kind: 'media', hasCaption: !!opts.caption, caption: opts.caption }) },
   };
-  await replyWithPhoto(mockMsg, 'SINGLE CAPTION', ['data/photos/2026-09-24/t1.jpg']);
+  await replyWithPhoto(mockMsg, 'SINGLE CAPTION', [PATHS[0]]);
   ok('single photo carries caption', sent.length === 1 && sent[0].kind === 'media' && sent[0].hasCaption && sent[0].caption === 'SINGLE CAPTION');
 }
 
 // ── Test 3: auto-attach helper links batch to a record ──
 {
   clearPhotoBatch();
-  // simulate two photos being saved into the batch (as handlePhoto does)
-  const now = Date.now();
-  const p1 = { path: 'data/photos/2026-09-24/t1.jpg', msgTime: now };
-  const p2 = { path: 'data/photos/2026-09-24/t2.jpg', msgTime: now };
-  const batchHolder = globalThis.__testBatch = [p1, p2];
-  // attachPendingPhotos currently reads the module-level photoBatch; instead verify via DB round-trip using its exported paths.
-  // We'll fake by calling updatePhotos through issuesDB then reading back.
-  const before = issuesDB.getRecent(1)[0];
-  let id;
-  if (before) id = before.id; else { const r = issuesDB.add({ date: '01/01/2026', title: 'auto test', description: 'x', category: 'Test', priority: 'medium', status: 'open', location: null, reportedBy: null, assignedTo: null, photo: null }); id = r.lastInsertRowid; }
-  issuesDB.updatePhotos(id, ['data/photos/2026-09-24/t1.jpg', 'data/photos/2026-09-24/t2.jpg']);
-  const fresh = issuesDB.getById(id);
-  ok('multi photos stored + readable', typeof fresh.photos === 'string' && fresh.photos.includes('t1.jpg') && fresh.photos.includes('t2.jpg'));
-  issuesDB.delete(id);
+  // Two photos "waiting", then attached to a record we create ourselves.
+  const probe = await inSite(() =>
+    issuesDB.add({ date: '01/01/2026', title: 'auto test', description: 'x', category: 'Test', priority: 'medium', status: 'open' })
+  );
+  const id = probe.lastInsertRowid;
+  await inSite(() => issuesDB.updatePhotos(id, [PATHS[0], PATHS[1]]));
+  const fresh = await inSite(() => issuesDB.getById(id));
+  ok('multi photos stored + readable', typeof fresh.photos === 'string' && fresh.photos.includes(PATHS[0]) && fresh.photos.includes(PATHS[1]));
+  ok('both photos on the record', (JSON.parse(fresh.photos || '[]') || []).length === 2);
+  await inSite(() => issuesDB.delete(id));
+  const gone = await inSite(() => issuesDB.getById(id));
+  ok('probe issue cleaned up', gone == null);
 }
 
 if (!failed) console.log('\nAll reply/attach tests passed.');
 else { console.log('\nSome tests FAILED.'); process.exitCode = 1; }
+await sql.end();
