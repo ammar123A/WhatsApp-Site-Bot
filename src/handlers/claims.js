@@ -23,6 +23,8 @@ import { safeName } from '../fileStore.js';
 import { getToday } from '../utils.js';
 
 const pad = (n) => String(n).padStart(2, '0');
+/** Storage folder for one person's claims: the digits of their WhatsApp id. */
+const jidFolder = (jid) => String(jid || '').replace(/\D/g, '') || 'unknown';
 
 /** What day of the month the claim sheet goes out. */
 export const CLAIM_DAY = 28;
@@ -140,10 +142,13 @@ export async function recordClaimReceipt(msg, { sender = null, jid = '', date = 
   const bucket = config.personalBucket;
 
   const ext = (String(media.mimetype || '').includes('png')) ? '.png' : '.jpg';
-  const key = `${month}/receipt-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}${ext}`;
+  // Per-person folder plus the message id: a timestamp alone collided across
+  // users (and within one batch forward), and upsert let one overwrite another.
+  const msgId = String(msg.id?.id || Date.now()).replace(/[^A-Za-z0-9]/g, '');
+  const key = `${month}/${jidFolder(jid)}/receipt-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}-${msgId}${ext}`;
 
   await ensureBucket(bucket);
-  await uploadPhoto(key, buffer, media.mimetype || 'image/jpeg', true, bucket);
+  await uploadPhoto(key, buffer, media.mimetype || 'image/jpeg', false, bucket);
 
   const row = await personalClaimsDB.add({
     month,
@@ -201,7 +206,8 @@ export async function buildMonthlyClaim(jid, month, { date = new Date() } = {}) 
 
   const total = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const fileName = safeName(`CLAIM-${month}`, '.pdf', date);
-  const key = `Personal/${month}/${fileName}`;
+  // Per person, or every user's sheet overwrote the same object.
+  const key = `Personal/${month}/${jidFolder(jid)}/${fileName}`;
   // Personal claim output belongs with the private receipts, not in the
   // site's compiled-document bucket. The old reference recreated the deleted
   // `site-compile-pdf` bucket whenever a personal claim was compiled.
