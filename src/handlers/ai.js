@@ -1,7 +1,7 @@
 import { askGemini, isConfigured } from '../llm.js';
 import { progressDB, materialsDB, issuesDB, attendanceDB, diaryDB, pendingDB, remindersDB, currentSite } from '../database.js';
 import { parseReminderRequest, reminderConversationKey, rememberPendingReminder, takePendingReminder } from '../reminders.js';
-import { getToday, getSenderName, parseRecordDate } from '../utils.js';
+import { getToday, getSenderName, parseRecordDate, isAdmin } from '../utils.js';
 import { attachPendingPhotos, attachPhotoPaths, getPhotoBatchPaths, clearPhotoBatch, getPhotoBatchSize, handleAttach } from './photos.js';
 import { linkPendingFiles, pendingCount, pendingIsDelayed } from './files.js';
 import { buildRecordSnapshot, recallRecords } from '../recordContext.js';
@@ -20,17 +20,13 @@ function mutationKey(msg) {
 }
 
 async function isAdminMessage(msg) {
-  const ids = [msg.author, msg.from];
+  // The sender only - never msg.from, which in a group is the group's own id.
+  const ids = [msg.author];
   try {
     const contact = await msg.getContact?.();
     ids.push(contact?.number, contact?.id?.user, contact?.id?._serialized);
   } catch { /* LID resolution is best effort; command routing also checks admin */ }
-  const normalise = (value) => String(value || '').replace(/\D/g, '');
-  return ids.filter(Boolean).some((id) => config.adminNumbers.some((n) => {
-    const a = normalise(n);
-    const b = normalise(id);
-    return a && b && (a === b || a.endsWith(b) || b.endsWith(a));
-  }));
+  return ids.filter(Boolean).some(isAdmin);
 }
 
 function queueMutation(msg, item) {
@@ -53,6 +49,15 @@ export async function handleMutationConfirmation(msg) {
   }
   if (!/^(yes|ya|y|confirm|sahkan|ok|okay)$/.test(answer)) return false;
   pendingMutations.delete(key);
+  if (pending.kind === 'edit') {
+    if (!await isAdminMessage(msg)) {
+      await msg.reply('Edit rekod hanya untuk admin/supervisor boss.');
+      return true;
+    }
+    const out = await doEdit(msg, pending.record, { skipConfirm: true });
+    await msg.reply(out.ok ? out.text : `Tak dapat edit - ${out.why}`);
+    return true;
+  }
   const out = await doDelete(msg, pending.record, pending.rawText, { skipConfirm: true });
   if (!out.ok) await msg.reply(`Tak dapat delete - ${out.why}`);
   else await msg.reply(out.text);
@@ -418,7 +423,7 @@ const sameName = (a, b) =>
  *   buang/hapus -> remove just that one entry
  *   plain value -> replace the whole section
  */
-async function doEditSS(msg, r) {
+async function doEditSS(msg, r, { skipConfirm = false } = {}) {
   const fieldKey = oneOf(r.field, Object.keys(SS_FIELDS), '');
   if (!fieldKey) {
     return { ok: false, ask: true, why: `bahagian mana nak edit? (${Object.values(SS_KEY_LABEL).filter((v, i, a) => a.indexOf(v) === i).join(', ')})` };
@@ -483,6 +488,11 @@ async function doEditSS(msg, r) {
   } else {
     next = cleanValue;
     what = adding ? 'tambah' : 'tukar';
+  }
+
+  if (!skipConfirm) {
+    queueMutation(msg, { kind: 'edit', record: r });
+    return { ok: false, confirm: true, why: `Confirm edit *Project SS ${date}* — ${label} (${what})? Reply *YES* untuk teruskan atau *NO* untuk batal.` };
   }
 
   // Targeted write: only this one column moves, all other sections untouched.
@@ -640,16 +650,16 @@ function collectIds(r, text) {
 }
 
 /** Change one field of an existing record. */
-async function doEdit(msg, r) {
+async function doEdit(msg, r, { skipConfirm = false } = {}) {
   // Project SS is handled by date, not by id.
   const wantsSS = /\b(ss|projectss|project ss|laporan|report)\b/i.test(String(r.type || '')) ||
     /\b(ss|projectss)\b/i.test(String(r.record || r.recordType || r.what || ''));
-  if (wantsSS) return doEditSS(msg, r);
+  if (wantsSS) return doEditSS(msg, r, { skipConfirm });
 
   const id = parseInt(r.id, 10);
   const type = oneOf(r.type, [...Object.keys(EDITABLE), 'ss'], '');
   if (!type) return { ok: false, ask: true, why: `edit record yang mana? (${editableTypes()}, projectss)` };
-  if (type === 'ss') return doEditSS(msg, r);
+  if (type === 'ss') return doEditSS(msg, r, { skipConfirm });
   if (!id) return { ok: false, ask: true, why: `nombor ${type} mana?` };
 
   const field = oneOf(r.field, Object.keys(EDITABLE[type]), '');
@@ -667,6 +677,13 @@ async function doEdit(msg, r) {
     data = { [column]: parseFloat(value) || 0 };
   } else {
     data = { [column]: req(value, 300) };
+  }
+
+  // Two-step like delete: the model reads the whole group chat, so a member's
+  // message can steer it into proposing an edit the admin never asked for.
+  if (!skipConfirm) {
+    queueMutation(msg, { kind: 'edit', record: r });
+    return { ok: false, confirm: true, why: `Confirm edit *${type} #${id}*: ${field} → ${data[column]}? Reply *YES* untuk teruskan atau *NO* untuk batal.` };
   }
 
   const res = await TABLES[type]().update(id, data);
@@ -1178,6 +1195,7 @@ const say = async (text) => {
         if (!interactive) return undefined;
         if (!await isAdminMessage(msg)) return msg.reply('Edit rekod hanya untuk admin/supervisor boss.');
         const out = await doEdit(msg, r);
+        if (out.confirm) return msg.reply(out.why);
         if (out.ask) return askBack(out.why);
         if (!out.ok) return msg.reply(`Tak dapat edit - ${out.why}`);
         return msg.reply(out.text);

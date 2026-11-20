@@ -96,7 +96,7 @@ export async function compileToPdf(msg, { ids = [], name = '', sender = null, si
   const bucket = siteBucketFor(siteName);
   const today = new Date();
   const date = getToday();
-  const fileName = safeName(name || `COMPILED-${today.replace(/\//g, '-')}`, '.pdf', today);
+  const fileName = safeName(name || `COMPILED-${date.replace(/\//g, '-')}`, '.pdf', today);
   await ensureBucket(bucket);
   const key = await uploadNew(`${categoryFolderFor(siteName, 'compiled', today)}/${fileName}`, merged, 'application/pdf', bucket);
 
@@ -126,7 +126,8 @@ export async function compileToPdf(msg, { ids = [], name = '', sender = null, si
     `${provenance}`;
 
   if (send && msg?.reply) {
-    const { MessageMedia } = await import('whatsapp-web.js');
+    // CommonJS package: named ESM import gives undefined, so read it off default.
+    const { MessageMedia } = (await import('whatsapp-web.js')).default;
     await msg.reply(text, { media: new MessageMedia('application/pdf', merged.toString('base64'), fileName) });
   }
 

@@ -244,7 +244,8 @@ export async function sendMonthlyClaim(client, jid, month, { date = new Date() }
   const built = await buildMonthlyClaim(jid, month, { date });
   if (!built.ok) return { ok: false, error: built.error };
 
-  const { MessageMedia } = await import('whatsapp-web.js');
+  // CommonJS package: named ESM import gives undefined, so read it off default.
+  const { MessageMedia } = (await import('whatsapp-web.js')).default;
   await client.sendMessage(jid, new MessageMedia('application/pdf', built.buffer.toString('base64'), built.fileName));
 
   const rows = await personalClaimsDB.list(jid, month);

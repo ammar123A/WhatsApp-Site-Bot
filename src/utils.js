@@ -249,11 +249,18 @@ export function formatDate(dateStr) {
 
 // Check if number is admin
 export function isAdmin(phoneNumber) {
-  const cleanNumber = (phoneNumber || '').replace(/[^0-9]/g, '');
-  if (!cleanNumber) return false; // ''.endsWith check below would match every admin
+  const cleanNumber = String(phoneNumber || '').replace(/\D/g, '');
+  if (!cleanNumber) return false;
   return config.adminNumbers.some(admin => {
-    const cleanAdmin = admin.replace(/[^0-9]/g, '');
-    return cleanNumber.endsWith(cleanAdmin) || cleanAdmin.endsWith(cleanNumber);
+    const cleanAdmin = String(admin).replace(/\D/g, '');
+    // A stray "," or "+" in ADMIN_NUMBERS cleans to '' and ''.endsWith matched everyone.
+    if (!cleanAdmin) return false;
+    if (cleanNumber === cleanAdmin) return true;
+    // Local vs international format (0123456789 vs 60123456789): suffix match
+    // only when the shorter side is a full national number, never a fragment.
+    // ponytail: still matches a same-9-digit tail in another country; store admins in E.164 to remove that.
+    const [short, long] = cleanNumber.length < cleanAdmin.length ? [cleanNumber, cleanAdmin] : [cleanAdmin, cleanNumber];
+    return short.length >= 9 && long.endsWith(short);
   });
 }
 
