@@ -1,7 +1,7 @@
 -- Run once in Supabase: SQL Editor -> paste -> Run.
 -- Timestamps are stored as TEXT 'YYYY-MM-DD HH:MM:SS' in Malaysia time, same as the old SQLite DB.
 
-create or replace function local_now() returns text language sql stable as $$
+create or replace function local_now() returns text language sql stable set search_path = '' as $$
   select to_char(now() at time zone 'Asia/Kuala_Lumpur', 'YYYY-MM-DD HH24:MI:SS')
 $$;
 

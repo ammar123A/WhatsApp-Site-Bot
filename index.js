@@ -153,7 +153,9 @@ const client = new Client({
   puppeteer: {
     // Chrome headless is failing on the current Chrome build, while normal
     // visible Chrome launches and stays attached reliably on this machine.
-    executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    executablePath: process.env.CHROME_PATH || (process.platform === 'win32'
+      ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+      : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
     // Keep the browser window alive; the terminal remains visible as requested.
     headless: false,
     // Audio uploads through WhatsApp Web can take longer than normal text
@@ -835,8 +837,12 @@ async function handlePrivateMessage(msg, { senderName = '', senderNumber = '' } 
 
   if (command === '.claim test' || command === '.claim testpdf') {
     // Compile and send this month right now instead of waiting for the 28th.
+    // Admin only, and only the sender's own claims: an unscoped forced sweep
+    // sent (and marked compiled) every user's month and replied with the first
+    // one's total.
+    if (!(await senderIsAdmin(msg))) return false;
     const { runClaimSweep } = await import('./src/claimScheduler.js');
-    const out = await runClaimSweep(client, { force: true });
+    const out = await runClaimSweep(client, { force: true, jid });
     if (!out.sent.length) return msg.reply('Tiada claim untuk dihantar.'), true;
     const sent = out.sent[0];
     return msg.reply(
@@ -904,10 +910,12 @@ client.on('message', async (msg) => {
       if (isBlockedGroup(msg.from)) {
         return;
       }
-      const askedByAdmin = config.adminNumbers.some((a) => String(a).trim() === String(senderNumber));
-
-      // Claim this group as a site group: admin tagging it, or `.site`.
-      const wantsClaim = (mentioned && askedByAdmin) || /^\.(site|daftar|register)\b/i.test(messageBody);
+      // Claim this group as a site group: admin tagging it, or admin `.site`.
+      // senderIsAdmin resolves the group sender's @lid to a phone number; the
+      // old exact compare against senderNumber never matched a LID, and `.site`
+      // had no check at all, so any member could switch the bot on anywhere.
+      const wantsClaim = (mentioned || /^\.(site|daftar|register)\b/i.test(messageBody)) &&
+        await senderIsAdmin(msg);
       if (wantsClaim) {
         allowGroupPersistently(msg.from);
         let claimName = '';
@@ -923,7 +931,7 @@ client.on('message', async (msg) => {
       }
 
       // An admin may also turn a group OFF with `.unsite`.
-      if (/^\.unsite\b/i.test(messageBody)) {
+      if (/^\.unsite\b/i.test(messageBody) && await senderIsAdmin(msg)) {
         blockGroup(msg.from, 'admin');
         const remaining = [...loadAllowedGroups(), ...allowGroupsFromEnv(config.siteGroups)].filter(
           (id) => id !== msg.from

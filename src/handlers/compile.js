@@ -10,8 +10,8 @@
  */
 import config from '../../config.js';
 import { filesDB } from '../database.js';
-import { downloadPhoto, uploadPhoto, ensureBucket } from '../photoStore.js';
-import { categoryFolderFor, siteBucketName, safeName } from '../fileStore.js';
+import { downloadPhoto, ensureBucket } from '../photoStore.js';
+import { categoryFolderFor, siteBucketFor, safeName, uploadNew } from '../fileStore.js';
 import { mergePdfs, imagesToPdf, pdfPageCount } from '../pdfTools.js';
 import { getToday } from '../utils.js';
 
@@ -93,14 +93,12 @@ export async function compileToPdf(msg, { ids = [], name = '', sender = null, si
   const pages = await pdfPageCount(merged);
   if (!pages) return { ok: false, text: 'Gagal compile - tiada page boleh dibaca.' };
 
-  const bucket = siteBucketName(siteName);
+  const bucket = siteBucketFor(siteName);
   const today = new Date();
   const date = getToday();
   const fileName = safeName(name || `COMPILED-${today.replace(/\//g, '-')}`, '.pdf', today);
-  const key = `${categoryFolderFor(siteName, 'compiled', today)}/${fileName}`;
-
   await ensureBucket(bucket);
-  await uploadPhoto(key, merged, 'application/pdf', true, bucket);
+  const key = await uploadNew(`${categoryFolderFor(siteName, 'compiled', today)}/${fileName}`, merged, 'application/pdf', bucket);
 
   const sourceIds = rows.map((r) => r.id);
   const provenance = `compiled from ${sourceIds.map((i) => `#${i}`).join(', ')}` +

@@ -22,10 +22,11 @@ let timer = null;
 /**
  * @returns {{sent: object[], skipped: number, reason?: string}}
  */
-export async function runClaimSweep(client, { now = new Date(), force = false } = {}) {
+export async function runClaimSweep(client, { now = new Date(), force = false, jid = null } = {}) {
   await ensurePersonalSchema();
 
-  const pending = await personalClaimsDB.uncompiledMonths();
+  // `jid` limits a manual run to one person's claims.
+  const pending = (await personalClaimsDB.uncompiledMonths()).filter((r) => !jid || r.jid === jid);
   if (!pending.length) return { sent: [], skipped: 0, reason: 'nothing pending' };
 
   const thisMonth = claimMonth(now);

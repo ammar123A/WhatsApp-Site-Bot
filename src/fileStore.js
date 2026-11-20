@@ -14,7 +14,7 @@
  */
 import config from '../config.js';
 import { downloadAnyMedia, uploadPhoto, ensureBucket } from './photoStore.js';
-import { filesDB } from './database.js';
+import { filesDB, currentSite } from './database.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -208,6 +208,31 @@ export function siteBucketName(siteName) {
   return normalized || 'site';
 }
 
+/**
+ * Bucket for the site being served. Keyed by the site's schema, which carries a
+ * hash of the group id, so two groups that share a display name (or a renamed
+ * group) can never write into each other's bucket.
+ */
+export function siteBucketFor(siteName) {
+  return siteBucketName(currentSite()?.schema || siteName);
+}
+
+/**
+ * Upload without ever replacing an existing object. On a name clash the key gets
+ * a unique suffix instead. Returns the key actually written.
+ */
+export async function uploadNew(key, buffer, mimetype, bucket) {
+  try {
+    await uploadPhoto(key, buffer, mimetype, false, bucket);
+    return key;
+  } catch (e) {
+    if (!/\b409\b|duplicate|already exists/i.test(String(e?.message || e))) throw e;
+    const unique = key.replace(/(\.[a-z0-9]{2,5})?$/i, `-${Date.now().toString(36)}$1`);
+    await uploadPhoto(unique, buffer, mimetype, false, bucket);
+    return unique;
+  }
+}
+
 /** "drawings/26-10-2026" inside the site's own bucket. */
 export function categoryFolderFor(siteName, category, date) {
   const folder = config.fileCategoryFolders?.[category] || category || 'other';
@@ -386,7 +411,7 @@ export async function saveSiteFile(msg, { siteName, caption = '', sender = null,
 
   // Each site is its own Supabase bucket. Category and date are folders inside
   // that bucket: <site-bucket>/<category>/<date>/<file>.
-  const bucket = siteBucketName(siteName);
+  const bucket = siteBucketFor(siteName);
 
   // Versioning is keyed on (category, doc_name). Only named documents version -
   // photos and voice notes do not.
@@ -407,11 +432,11 @@ export async function saveSiteFile(msg, { siteName, caption = '', sender = null,
   // already separates the broad type (site-pdf, site-drawings, etc.); symbols
   // choose the category, while the physical layout stays predictable.
   const folder = categoryFolderFor(siteName, finalCategory, date);
-  const key = `${folder}/${fileName}`;
+  let key = `${folder}/${fileName}`;
 
   try {
     await ensureBucket(bucket);
-    await uploadPhoto(key, buffer, mime || 'application/octet-stream', true, bucket);
+    key = await uploadNew(key, buffer, mime || 'application/octet-stream', bucket);
   } catch (e) {
     return { error: `upload failed: ${e.message || e}` };
   }
