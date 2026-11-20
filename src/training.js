@@ -54,6 +54,10 @@ export async function writeSystemPrompt(text) {
  * @param {string} [s.model]
  * @param {boolean} [s.valid] false = parse/schema failure (kept as a negative)
  */
+// People paste keys into the group. The dataset must never keep them.
+const SECRET = /\b(?:csk-|gsk_|sk-|xi-|AIza|eyJ)[A-Za-z0-9._-]{16,}|(?<=postgres(?:ql)?:\/\/[^:\s]+:)[^@\s]+(?=@)/g;
+export const redactSecrets = (text) => String(text).replace(SECRET, '[redacted]');
+
 export async function logSample({ prompt, output, action = null, reply = null, model = null, valid = true, elapsedMs = null }) {
   try {
     if (typeof prompt !== 'string' || prompt.length === 0) return;
@@ -64,9 +68,9 @@ export async function logSample({ prompt, output, action = null, reply = null, m
       model,
       action,
       elapsedMs,
-      prompt,
-      output: String(output || '').slice(0, 8000),
-      reply: reply == null ? null : String(reply).slice(0, 1000),
+      prompt: redactSecrets(prompt),
+      output: redactSecrets(String(output || '').slice(0, 8000)),
+      reply: reply == null ? null : redactSecrets(String(reply).slice(0, 1000)),
     };
     await appendFile(DATASET_PATH, `${JSON.stringify(row)}\n`, 'utf8');
   } catch (err) {

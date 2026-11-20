@@ -36,3 +36,9 @@ Thumbs.db
 .vscode/
 .idea/
 site-groups.json
+
+# Claude Code local config/skills
+.claude/
+
+# LLM training logs: raw group chat, never commit
+training/*.jsonl
